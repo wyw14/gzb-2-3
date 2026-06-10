@@ -84,13 +84,13 @@
             <el-option v-for="s in otherTeachSkills" :key="s.id" :label="s.name" :value="s.name" />
           </el-select>
         </el-form-item>
-        <el-form-item label="学习目标">
+        <el-form-item label="学习目标" required>
           <el-input v-model="exchangeForm.learningGoal" type="textarea" :rows="3" placeholder="描述你希望达到的学习效果..." maxlength="300" show-word-limit />
         </el-form-item>
         <el-form-item label="预计课次">
           <el-input-number v-model="exchangeForm.expectedSessions" :min="1" :max="50" />
         </el-form-item>
-        <el-form-item label="备选时间">
+        <el-form-item label="备选时间" required>
           <div class="time-slots-input">
             <el-input v-model="newTimeSlot" placeholder="例如：每周三晚8点" style="flex:1" @keyup.enter="addTimeSlot" />
             <el-button type="primary" @click="addTimeSlot">添加</el-button>
@@ -248,14 +248,23 @@ async function createExchange() {
     ElMessage.warning('请选择你想学的技能')
     return
   }
+  if (!exchangeForm.value.learningGoal || !exchangeForm.value.learningGoal.trim()) {
+    ElMessage.warning('请填写学习目标')
+    return
+  }
+  const cleanTimes = exchangeForm.value.alternativeTimes.filter(t => t && t.trim())
+  if (cleanTimes.length === 0) {
+    ElMessage.warning('请至少添加一个备选时间')
+    return
+  }
   try {
     await exchangeAPI.createExchange({
       partnerId: currentUserId.value,
       canTeach: exchangeForm.value.canTeach,
       wantToLearn: exchangeForm.value.wantToLearn,
-      learningGoal: exchangeForm.value.learningGoal,
+      learningGoal: exchangeForm.value.learningGoal.trim(),
       expectedSessions: exchangeForm.value.expectedSessions,
-      alternativeTimes: exchangeForm.value.alternativeTimes
+      alternativeTimes: cleanTimes.map(t => t.trim())
     })
     ElMessage.success('协商方案已发送')
     showExchangeDialog.value = false

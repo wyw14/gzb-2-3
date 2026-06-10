@@ -231,13 +231,13 @@
         <el-form-item label="你想学什么" required>
           <el-input v-model="counterForm.wantToLearn" placeholder="填写你想学的技能" />
         </el-form-item>
-        <el-form-item label="学习目标">
+        <el-form-item label="学习目标" required>
           <el-input v-model="counterForm.learningGoal" type="textarea" :rows="3" placeholder="描述你希望达到的学习效果..." maxlength="300" show-word-limit />
         </el-form-item>
         <el-form-item label="预计课次">
           <el-input-number v-model="counterForm.expectedSessions" :min="1" :max="50" />
         </el-form-item>
-        <el-form-item label="备选时间">
+        <el-form-item label="备选时间" required>
           <div class="time-slots-input">
             <el-input v-model="newCounterTimeSlot" placeholder="例如：每周三晚8点" style="flex:1" @keyup.enter="addCounterTimeSlot" />
             <el-button type="primary" @click="addCounterTimeSlot">添加</el-button>
@@ -410,22 +410,31 @@ function removeCounterTimeSlot(index) {
 }
 
 async function submitCounterProposal() {
-  if (!counterForm.value.canTeach) {
+  if (!counterForm.value.canTeach || !counterForm.value.canTeach.trim()) {
     ElMessage.warning('请填写你能教什么')
     return
   }
-  if (!counterForm.value.wantToLearn) {
+  if (!counterForm.value.wantToLearn || !counterForm.value.wantToLearn.trim()) {
     ElMessage.warning('请填写你想学什么')
+    return
+  }
+  if (!counterForm.value.learningGoal || !counterForm.value.learningGoal.trim()) {
+    ElMessage.warning('请填写学习目标')
+    return
+  }
+  const cleanTimes = counterForm.value.alternativeTimes.filter(t => t && t.trim())
+  if (cleanTimes.length === 0) {
+    ElMessage.warning('请至少添加一个备选时间')
     return
   }
   try {
     submittingCounter.value = true
     await exchangeAPI.counterProposal(counterExchange.value.id, {
-      canTeach: counterForm.value.canTeach,
-      wantToLearn: counterForm.value.wantToLearn,
-      learningGoal: counterForm.value.learningGoal,
+      canTeach: counterForm.value.canTeach.trim(),
+      wantToLearn: counterForm.value.wantToLearn.trim(),
+      learningGoal: counterForm.value.learningGoal.trim(),
       expectedSessions: counterForm.value.expectedSessions,
-      alternativeTimes: counterForm.value.alternativeTimes
+      alternativeTimes: cleanTimes.map(t => t.trim())
     })
     ElMessage.success('调整方案已提交')
     showCounterDialog.value = false

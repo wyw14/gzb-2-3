@@ -291,19 +291,29 @@ app.post('/api/exchanges', authMiddleware, (req, res) => {
   if (partnerId === req.user.id) {
     return res.status(400).json({ error: '不能和自己发起交换' });
   }
-  if (!canTeach || !wantToLearn) {
-    return res.status(400).json({ error: '请填写你能教什么和想学什么' });
+  if (!canTeach || !canTeach.trim()) {
+    return res.status(400).json({ error: '请填写你能教什么' });
+  }
+  if (!wantToLearn || !wantToLearn.trim()) {
+    return res.status(400).json({ error: '请填写你想学什么' });
+  }
+  if (!learningGoal || !learningGoal.trim()) {
+    return res.status(400).json({ error: '请填写学习目标' });
+  }
+  if (!Array.isArray(alternativeTimes) || alternativeTimes.filter(t => t && t.trim()).length === 0) {
+    return res.status(400).json({ error: '请至少添加一个备选时间' });
   }
 
   const exchanges = readJson('exchanges.json');
+  const cleanAlternativeTimes = alternativeTimes.filter(t => t && t.trim()).map(t => t.trim());
   const initialProposal = {
     version: 1,
     proposerId: req.user.id,
-    canTeach,
-    wantToLearn,
-    learningGoal: learningGoal || '',
+    canTeach: canTeach.trim(),
+    wantToLearn: wantToLearn.trim(),
+    learningGoal: learningGoal.trim(),
     expectedSessions: expectedSessions || 1,
-    alternativeTimes: alternativeTimes || [],
+    alternativeTimes: cleanAlternativeTimes,
     createdAt: new Date().toISOString()
   };
   const newExchange = {
@@ -336,19 +346,29 @@ app.put('/api/exchanges/:id/counter-proposal', authMiddleware, (req, res) => {
   if (exchange.status !== 'negotiating') {
     return res.status(400).json({ error: '当前状态不允许调整方案' });
   }
-  if (!canTeach || !wantToLearn) {
-    return res.status(400).json({ error: '请填写你能教什么和想学什么' });
+  if (!canTeach || !canTeach.trim()) {
+    return res.status(400).json({ error: '请填写你能教什么' });
+  }
+  if (!wantToLearn || !wantToLearn.trim()) {
+    return res.status(400).json({ error: '请填写你想学什么' });
+  }
+  if (!learningGoal || !learningGoal.trim()) {
+    return res.status(400).json({ error: '请填写学习目标' });
+  }
+  if (!Array.isArray(alternativeTimes) || alternativeTimes.filter(t => t && t.trim()).length === 0) {
+    return res.status(400).json({ error: '请至少添加一个备选时间' });
   }
 
+  const cleanAlternativeTimes = alternativeTimes.filter(t => t && t.trim()).map(t => t.trim());
   const lastVersion = exchange.proposals[exchange.proposals.length - 1].version;
   const newProposal = {
     version: lastVersion + 1,
     proposerId: req.user.id,
-    canTeach,
-    wantToLearn,
-    learningGoal: learningGoal || '',
+    canTeach: canTeach.trim(),
+    wantToLearn: wantToLearn.trim(),
+    learningGoal: learningGoal.trim(),
     expectedSessions: expectedSessions || 1,
-    alternativeTimes: alternativeTimes || [],
+    alternativeTimes: cleanAlternativeTimes,
     createdAt: new Date().toISOString()
   };
 
