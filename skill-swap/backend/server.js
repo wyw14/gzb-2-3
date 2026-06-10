@@ -283,28 +283,82 @@ app.get('/api/conversations', authMiddleware, (req, res) => {
 });
 
 app.post('/api/exchanges', authMiddleware, (req, res) => {
-  const { partnerId, skills } = req.body;
+  const { partnerId, canTeach, wantToLearn, learningGoal, expectedSessions, alternativeTimes } = req.body;
 
-  if (!partnerId || !skills) {
-    return res.status(400).json({ error: '请指定交换对象和交换技能' });
+  if (!partnerId) {
+    return res.status(400).json({ error: '请指定交换对象' });
   }
   if (partnerId === req.user.id) {
     return res.status(400).json({ error: '不能和自己发起交换' });
   }
+  if (!canTeach || !wantToLearn) {
+    return res.status(400).json({ error: '请填写你能教什么和想学什么' });
+  }
 
   const exchanges = readJson('exchanges.json');
+  const initialProposal = {
+    version: 1,
+    proposerId: req.user.id,
+    canTeach,
+    wantToLearn,
+    learningGoal: learningGoal || '',
+    expectedSessions: expectedSessions || 1,
+    alternativeTimes: alternativeTimes || [],
+    createdAt: new Date().toISOString()
+  };
   const newExchange = {
     id: uuidv4(),
     initiatorId: req.user.id,
-    partnerId: req.body.partnerId,
-    skills: req.body.skills,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    confirmedBy: []
+    partnerId,
+    status: 'negotiating',
+    proposals: [initialProposal],
+    currentProposal: initialProposal,
+    confirmedBy: [req.user.id],
+    createdAt: new Date().toISOString()
   };
   exchanges.push(newExchange);
   writeJson('exchanges.json', exchanges);
   res.json(newExchange);
+});
+
+app.put('/api/exchanges/:id/counter-proposal', authMiddleware, (req, res) => {
+  const { canTeach, wantToLearn, learningGoal, expectedSessions, alternativeTimes } = req.body;
+  const exchanges = readJson('exchanges.json');
+  const index = exchanges.findIndex(e => e.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: '交换不存在' });
+  }
+
+  const exchange = exchanges[index];
+  if (exchange.initiatorId !== req.user.id && exchange.partnerId !== req.user.id) {
+    return res.status(403).json({ error: '无权操作此交换' });
+  }
+  if (exchange.status !== 'negotiating') {
+    return res.status(400).json({ error: '当前状态不允许调整方案' });
+  }
+  if (!canTeach || !wantToLearn) {
+    return res.status(400).json({ error: '请填写你能教什么和想学什么' });
+  }
+
+  const lastVersion = exchange.proposals[exchange.proposals.length - 1].version;
+  const newProposal = {
+    version: lastVersion + 1,
+    proposerId: req.user.id,
+    canTeach,
+    wantToLearn,
+    learningGoal: learningGoal || '',
+    expectedSessions: expectedSessions || 1,
+    alternativeTimes: alternativeTimes || [],
+    createdAt: new Date().toISOString()
+  };
+
+  exchange.proposals.push(newProposal);
+  exchange.currentProposal = newProposal;
+  exchange.confirmedBy = [req.user.id];
+
+  exchanges[index] = exchange;
+  writeJson('exchanges.json', exchanges);
+  res.json(exchange);
 });
 
 app.put('/api/exchanges/:id/confirm', authMiddleware, (req, res) => {
@@ -315,24 +369,51 @@ app.put('/api/exchanges/:id/confirm', authMiddleware, (req, res) => {
   }
 
   const exchange = exchanges[index];
+  if (exchange.initiatorId !== req.user.id && exchange.partnerId !== req.user.id) {
+    return res.status(403).json({ error: '无权操作此交换' });
+  }
+
   if (!exchange.confirmedBy.includes(req.user.id)) {
     exchange.confirmedBy.push(req.user.id);
   }
 
   if (exchange.confirmedBy.length >= 2) {
-    exchange.status = 'completed';
-    exchange.completedAt = new Date().toISOString();
-
-    const users = readJson('users.json');
-    [exchange.initiatorId, exchange.partnerId].forEach(userId => {
-      const userIndex = users.findIndex(u => u.id === userId);
-      if (userIndex !== -1) {
-        users[userIndex].exchangeCount = (users[userIndex].exchangeCount || 0) + 1;
-        users[userIndex].skillPoints = (users[userIndex].skillPoints || 0) + 50;
-      }
-    });
-    writeJson('users.json', users);
+    exchange.status = 'active';
+    exchange.activeAt = new Date().toISOString();
   }
+
+  exchanges[index] = exchange;
+  writeJson('exchanges.json', exchanges);
+  res.json(exchange);
+});
+
+app.put('/api/exchanges/:id/complete', authMiddleware, (req, res) => {
+  const exchanges = readJson('exchanges.json');
+  const index = exchanges.findIndex(e => e.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: '交换不存在' });
+  }
+
+  const exchange = exchanges[index];
+  if (exchange.initiatorId !== req.user.id && exchange.partnerId !== req.user.id) {
+    return res.status(403).json({ error: '无权操作此交换' });
+  }
+  if (exchange.status !== 'active') {
+    return res.status(400).json({ error: '只有进行中的交换才能标记完成' });
+  }
+
+  exchange.status = 'completed';
+  exchange.completedAt = new Date().toISOString();
+
+  const users = readJson('users.json');
+  [exchange.initiatorId, exchange.partnerId].forEach(userId => {
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      users[userIndex].exchangeCount = (users[userIndex].exchangeCount || 0) + 1;
+      users[userIndex].skillPoints = (users[userIndex].skillPoints || 0) + 50;
+    }
+  });
+  writeJson('users.json', users);
 
   exchanges[index] = exchange;
   writeJson('exchanges.json', exchanges);

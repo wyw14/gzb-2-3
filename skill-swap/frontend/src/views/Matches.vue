@@ -70,7 +70,7 @@
             <el-button type="primary" @click="goToChat(match.userId)">
               <el-icon><ChatDotRound /></el-icon>开始聊天
             </el-button>
-            <el-button type="success" @click="createExchange(match)">
+            <el-button type="success" @click="openExchangeDialog(match)">
               <el-icon><Handshake /></el-icon>发起交换
             </el-button>
           </div>
@@ -83,6 +83,42 @@
         </template>
       </el-empty>
     </div>
+
+    <el-dialog v-model="showExchangeDialog" title="发起技能交换协商" width="560px">
+      <el-form :model="exchangeForm" label-position="top">
+        <el-form-item label="你能教什么" required>
+          <el-select v-model="exchangeForm.canTeach" placeholder="选择你可以教的技能" style="width: 100%">
+            <el-option v-for="skill in currentMatch?.matchedSkills?.iCanTeach || []" :key="skill" :label="skill" :value="skill" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="你想学什么" required>
+          <el-select v-model="exchangeForm.wantToLearn" placeholder="选择你想要学习的技能" style="width: 100%">
+            <el-option v-for="skill in currentMatch?.matchedSkills?.iCanLearn || []" :key="skill" :label="skill" :value="skill" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="学习目标">
+          <el-input v-model="exchangeForm.learningGoal" type="textarea" :rows="3" placeholder="描述你希望达到的学习效果..." maxlength="300" show-word-limit />
+        </el-form-item>
+        <el-form-item label="预计课次">
+          <el-input-number v-model="exchangeForm.expectedSessions" :min="1" :max="50" />
+        </el-form-item>
+        <el-form-item label="备选时间">
+          <div class="time-slots-input">
+            <el-input v-model="newTimeSlot" placeholder="例如：每周三晚8点" style="flex:1" @keyup.enter="addTimeSlot" />
+            <el-button type="primary" @click="addTimeSlot">添加</el-button>
+          </div>
+          <div class="time-slots-list">
+            <el-tag v-for="(t, i) in exchangeForm.alternativeTimes" :key="i" closable @close="removeTimeSlot(i)" class="time-tag">
+              {{ t }}
+            </el-tag>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showExchangeDialog = false">取消</el-button>
+        <el-button type="primary" @click="createExchange" :loading="submitting">提交协商方案</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -100,6 +136,17 @@ const filters = ref({
   keyword: '',
   category: '',
   minScore: 30
+})
+const showExchangeDialog = ref(false)
+const currentMatch = ref(null)
+const newTimeSlot = ref('')
+const submitting = ref(false)
+const exchangeForm = ref({
+  canTeach: '',
+  wantToLearn: '',
+  learningGoal: '',
+  expectedSessions: 4,
+  alternativeTimes: []
 })
 
 const filteredMatches = computed(() => {
@@ -150,18 +197,59 @@ function goToChat(userId) {
   router.push(`/chat/${userId}`)
 }
 
-async function createExchange(match) {
+function openExchangeDialog(match) {
+  currentMatch.value = match
+  exchangeForm.value = {
+    canTeach: '',
+    wantToLearn: '',
+    learningGoal: '',
+    expectedSessions: 4,
+    alternativeTimes: []
+  }
+  newTimeSlot.value = ''
+  showExchangeDialog.value = true
+}
+
+function addTimeSlot() {
+  const slot = newTimeSlot.value.trim()
+  if (!slot) return
+  if (exchangeForm.value.alternativeTimes.includes(slot)) {
+    ElMessage.warning('该时间已添加')
+    return
+  }
+  exchangeForm.value.alternativeTimes.push(slot)
+  newTimeSlot.value = ''
+}
+
+function removeTimeSlot(index) {
+  exchangeForm.value.alternativeTimes.splice(index, 1)
+}
+
+async function createExchange() {
+  if (!exchangeForm.value.canTeach) {
+    ElMessage.warning('请选择你能教的技能')
+    return
+  }
+  if (!exchangeForm.value.wantToLearn) {
+    ElMessage.warning('请选择你想学的技能')
+    return
+  }
   try {
+    submitting.value = true
     await exchangeAPI.createExchange({
-      partnerId: match.userId,
-      skills: {
-        teach: match.matchedSkills.iCanTeach,
-        learn: match.matchedSkills.iCanLearn
-      }
+      partnerId: currentMatch.value.userId,
+      canTeach: exchangeForm.value.canTeach,
+      wantToLearn: exchangeForm.value.wantToLearn,
+      learningGoal: exchangeForm.value.learningGoal,
+      expectedSessions: exchangeForm.value.expectedSessions,
+      alternativeTimes: exchangeForm.value.alternativeTimes
     })
-    ElMessage.success('交换请求已发送')
+    ElMessage.success('协商方案已发送')
+    showExchangeDialog.value = false
   } catch (e) {
-    ElMessage.error('发起交换失败')
+    ElMessage.error(e.message || '发起交换失败')
+  } finally {
+    submitting.value = false
   }
 }
 </script>
@@ -307,5 +395,21 @@ async function createExchange(match) {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+}
+
+.time-slots-input {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.time-slots-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.time-tag {
+  margin: 0;
 }
 </style>

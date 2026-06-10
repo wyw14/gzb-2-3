@@ -56,7 +56,9 @@ export const messageAPI = {
 export const exchangeAPI = {
   getExchanges: () => api.get('/exchanges'),
   createExchange: (data) => api.post('/exchanges', data),
-  confirmExchange: (id) => api.put(`/exchanges/${id}/confirm`)
+  counterProposal: (id, data) => api.put(`/exchanges/${id}/counter-proposal`, data),
+  confirmExchange: (id) => api.put(`/exchanges/${id}/confirm`),
+  completeExchange: (id) => api.put(`/exchanges/${id}/complete`)
 }
 
 export const reviewAPI = {
